@@ -30,3 +30,7 @@
 
 # Debug files
 *.dSYM/
+
+# Temporary files
+.*.swp
+
