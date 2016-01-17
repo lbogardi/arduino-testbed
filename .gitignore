@@ -34,3 +34,6 @@
 # Temporary files
 .*.swp
 
+# Build folders
+build*/
+

@@ -1,0 +1,26 @@
+#   Arduino-related environment variables for Arduino-Makefile
+#
+#   You can either source this file from the command line manually, or you can
+#   include it in your ~/.bashrc file.
+#
+#   NOTE: The below example settings are based on a general Ubuntu
+#   installation. YMMV.
+
+#   Installation directory of Arduino
+export ARDUINO_DIR=/usr/share/arduino
+
+#   Installation directory of the Arduino-Makefile by sudar
+#   -   See https://github.com/sudar/Arduino-Makefile
+export ARDMK_DIR=/usr/share/arduino
+
+#   The full path for the Arduino-Makefile
+#   -   This is just a convenience variable, so we can simply say
+#       "include $(ARDUINO_MK)" in our Makefile.
+export ARDUINO_MK=$ARDMK_DIR/Arduino.mk
+
+#   Installation directory of the AVR tools
+export AVR_TOOLS_DIR=/usr
+
+#   The full path of the avrdude confiugration file
+export AVRDUDE_CONF=/usr/share/arduino/hardware/tools/avrdude.conf
+
