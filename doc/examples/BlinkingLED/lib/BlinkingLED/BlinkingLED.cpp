@@ -12,14 +12,14 @@ BlinkingLED::BlinkingLED(uint8_t pin,
 
 void BlinkingLED::setup()
 {
-	pinMode(pin, OUTPUT);
+    pinMode(pin, OUTPUT);
 }
 
 void BlinkingLED::blink()
 {
-	digitalWrite(pin, HIGH);
-	delay(on_duration);
-	digitalWrite(pin, LOW);
-	delay(off_duration);
+    digitalWrite(pin, HIGH);
+    delay(on_duration);
+    digitalWrite(pin, LOW);
+    delay(off_duration);
 }
 
