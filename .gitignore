@@ -38,5 +38,13 @@
 build*/
 
 # Test binaries
-test/test_*
+test_*
+
+# Python
+.cache
+.eggs
+*.egg-info
+*.pyc
+__pycache__
+dist/
 
