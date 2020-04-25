@@ -6,24 +6,38 @@
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
 
-/* location related settings */
+/* 
+
+   location related settings 
+
+   and the final domain will look like this:
+   
+   http://home.lan/groundfloor/kitchen/
+   
+   
+*/
 #define ESP8266_NAME "home"
 #define FLOOR        "groundfloor"
-#define ROOM         "wc"
+// #define ROOM         "wc"           //28
+#define ROOM         "kitchen"        //27
+/* 
 
-#define STASSID      "---------"
-#define STAPSK       "---------"
+    placement     ->  ip-address
+                  
+    kitchen       ->  192.168.86.27, 
+    wc            ->  192.168.86.28, 
+    ad-blocker    ->  192.168.86.20,
+    chromecast    ->  192.168.86.3???
+    magicmirror   ->
+	
+	                              */
 
-// leave this one GITHUB
+// leave this one for GITHUB
 //#define STASSID      "ssid"
 //#define STAPSK       "pass"
 
-// below is the guest wifi
-//#define STASSID     "-----------------------"
-//#define STAPSK      "-----------------------"
-
-// the following lines should be commented out, 
-// if the element is not used
+// some of the code is not compiled into the binary
+// if some of the lines are commented out below
 #define UPTIME          1
 #define SS_RELAY        1
 #define RELAY           1
@@ -31,22 +45,21 @@
 #define DHT12_SENSOR    1
 #define BUILTIN_LED     1
 #define LIGHTS          1
-#define DEBUG           1          // all serial prints are supressed
-// some of the code is not compiled into the binary
-// if some of the lines above are commented out
+#define DEBUG           0 //  0 - quiet, 1 - verbose
 
+/*
+    GPIO4 and GPIO5 are the most safe to operate relays.
+    https://rabbithole.wwwdotorg.org/2017/03/28/esp8266-gpio.html
+    except, that SSR's LOW is Relay's on	
+	
+*/
+#define RELAY_PIN    D1  // GPIO5 relay connected to  GPIO0
+#define SSR_PIN      D5  // GPIO4 solid state relay on GPIO2
 
-// digital pin definitions
-#define RELAY_PIN    D1  // GPIO0  relay connected to  GPIO0
-#define PIR_PIN      D2  // GPIO4  passive infra receiver
 #define BUILTIN_LED  D4  // GPIO2  led to turn on and off
-#define SSR_PIN      D5  // GPIO12 solid state relay on GPIO2
+#define PIR_PIN      D5  // GPIO14  passive infra receiver
 
-// analog pin definitions
-#define DHT12_PIN    11          // time/humidity sensor
-
-//when to turn off light
-#define timeSeconds 3
+#define DHT12_PIN    11  // temp/humidity sensor
 
          int          PIR_state = 0;
 unsigned long    previousMillis = 0;            // When the sensor was last read
@@ -62,12 +75,16 @@ const char            *password = STAPSK;
 volatile byte  interruptCounter = 0;
 int          numberOfInterrupts = 0;
 
+//when to turn off light
+#define timeSeconds 3
+
 // Timer: Auxiliary variables
 unsigned long now = millis();
 unsigned long lastTriggerLED   = 0;
 unsigned long lastTriggerRELAY = 0;
 
-String  base_url        = "";
+String baseURL = "/" + String(FLOOR) + "/" + String(ROOM);
+//String  base_url        = "groundfloor/wc";
 
 boolean startTimerLED   = false;
 boolean startTimerRELAY = false;
@@ -107,18 +124,6 @@ void setup(void) {
   
   Serial.begin(115200);
   debug("WeMos DHT Server");
-  //String myHostname = "esp8266";
-  
-  // /ground/kitchen/lights/toggle
-  // /ground/kitchen/lights/state
-  char baseURL[70];
-  sprintf( baseURL, "/%s/%s", FLOOR, ROOM );
-  
-  // the IP address for the shield:
-  //IPAddress  ip(192, 168, 86, 27);
-  //IPAddress  gw(192, 168, 86,  1);
-  //IPAddress  sn(255, 255,  0,  0);
-  //IPAddress dns(192, 168, 86, 20);
 
   /* --------------------------- initialization ------------------------  */
   // how about DHT 
@@ -138,6 +143,11 @@ void setup(void) {
   pinMode(SSR_PIN, OUTPUT);
 #endif
 
+// if i try to enable this pin, wemos goes into an indefinite reboot cycle
+//#ifdef DHT12_SENSOR
+//  pinMode(DHT12_PIN, INPUT);
+//#endif
+
   /* attach interrupt to the PIR, so it reports whenever there is detection */
   attachInterrupt(digitalPinToInterrupt(PIR_PIN), handleInterrupt, RISING);
   
@@ -153,9 +163,6 @@ void setup(void) {
 	delay(500);
   }
 
-  //String hostName = "home.lan";
-  //String 
-
   if (!MDNS.begin(ESP8266_NAME)) {
     debug("Error setting up MDNS responder!"); 
 	while (1) { delay(1000); }
@@ -169,52 +176,51 @@ void setup(void) {
   /* --------------------------- handle different operations ------------------------  */
   server.onNotFound(handleNotFound);
   
-  server.on("/",               handleRoot ); 
-  server.on("/uptime",         readUptime );
-  server.on("/state/json",     returnAllStateJson );
+  server.on(baseURL + "/",           handleRoot ); 
+  server.on(baseURL + "/uptime",     readUptime );
+  server.on(baseURL + "/state/json", returnAllStateJson );
   
 #ifdef PIR_SENSOR
-  server.on("/pir/state",      pirState );
-  server.on("/pir/delay",      pirDelay );
+  server.on(baseURL + "/pir/state",      pirState );
+  server.on(baseURL + "/pir/delay",      pirDelay );
 #endif  
   
 #ifdef DHT12_SENSOR
-  server.on("/temp",           readTemp );
-  server.on("/temp/fahrenheit",readTempFahrenheit );
-  server.on("/temp/celsius",   readTemp );
-  server.on("/humidity",       readHumidity );
+  server.on(baseURL + "/temp",           readTemp );
+  server.on(baseURL + "/temp/fahrenheit",readTempFahrenheit );
+  server.on(baseURL + "/temp/celsius",   readTemp );
+  server.on(baseURL + "/humidity",       readHumidity );
 #endif
 
 #ifdef BUILTIN_LED
-  server.on("/led/on",     ledOn );
-  server.on("/led/off",    ledOff );
-  server.on("/led/state",  ledState );
-  server.on("/led/toggle", ledToggle );
+  server.on(baseURL + "/led/on",     ledOn );
+  server.on(baseURL + "/led/off",    ledOff );
+  server.on(baseURL + "/led/state",  ledState );
+  server.on(baseURL + "/led/toggle", ledToggle );
 #endif
 
 #ifdef LIGHTS
-  server.on("/light/on",     ledOn );
-  server.on("/light/off",    ledOff );
-  server.on("/light/state",  ledState );
-  server.on("/light/toggle", ledToggle );
+  server.on(baseURL + "/light/on",     ledOn );
+  server.on(baseURL + "/light/off",    ledOff );
+  server.on(baseURL + "/light/state",  ledState );
+  server.on(baseURL + "/light/toggle", ledToggle );
 #endif
 
 #ifdef RELAY
-  server.on("/relay/on",     relayOn );
-  server.on("/relay/off",    relayOff );
-  server.on("/relay/toggle", relayToggle );
-  server.on("/relay/state",  relayState );
+  server.on(baseURL + "/relay/on",     relayOn );
+  server.on(baseURL + "/relay/off",    relayOff );
+  server.on(baseURL + "/relay/toggle", relayToggle );
+  server.on(baseURL + "/relay/state",  relayState );
 #endif
 
 #ifdef SS_RELAY
-  server.on("/ssrelay/on",     ssRelayOn );
-  server.on("/ssrelay/off",    ssRelayOff );
-  server.on("/ssrelay/toggle", ssRelayToggle );
-  server.on("/ssrelay/state",  ssRelayState );
+  server.on(baseURL + "/ssrelay/on",     ssRelayOn );
+  server.on(baseURL + "/ssrelay/off",    ssRelayOff );
+  server.on(baseURL + "/ssrelay/toggle", ssRelayToggle );
+  server.on(baseURL + "/ssrelay/state",  ssRelayState );
 #endif
 
   server.begin();
-  
   debug("HTTP server started\n");
 }
 
@@ -285,20 +291,20 @@ void turnLedOff(void){
 
 void ledOn(void){
   turnLedOn();
-  server.sendHeader("Location","/");              
+  server.sendHeader("Location", baseURL + "/");              
   server.send(303);
   }
 
 void ledOff(void){
   turnLedOff();
-  server.sendHeader("Location","/");              
+  server.sendHeader("Location", baseURL + "/");              
   server.send(303);
   }
 
 void ledToggle(void){
   int state = digitalRead(LED_BUILTIN);
   digitalWrite(LED_BUILTIN, not state);
-  server.sendHeader("Location","/");              
+  server.sendHeader("Location", baseURL + "/");              
   server.send(303);
   }
 
@@ -314,13 +320,13 @@ void turnRelayOff(void){
   
 void relayOn(void){
   turnRelayOn();
-  server.sendHeader("Location","/");             
+  server.sendHeader("Location", baseURL + "/");             
   server.send(303);
 }
   
 void relayOff(void){
   turnRelayOff();
-  server.sendHeader("Location","/");              
+  server.sendHeader("Location", baseURL + "/");              
   server.send(303);
 }
 
@@ -333,7 +339,7 @@ void relayToggle(void){
   int state = digitalRead(RELAY_PIN);
   state = not state;
   digitalWrite(RELAY_PIN, state);
-  server.sendHeader("Location","/");              
+  server.sendHeader("Location", baseURL + "/");              
   server.send(303);
   }
 
@@ -351,13 +357,13 @@ void turnSSRelayOff(void){
   
 void ssRelayOn(void){
   turnSSRelayOn();
-  server.sendHeader("Location","/");             
+  server.sendHeader("Location", baseURL + "/");             
   server.send(303);
 }
   
 void ssRelayOff(void){
   turnSSRelayOff();
-  server.sendHeader("Location","/");              
+  server.sendHeader("Location", baseURL + "/");              
   server.send(303);
 }
 
@@ -370,7 +376,7 @@ void ssRelayToggle(void){
   int state = digitalRead(SSR_PIN);
   state = not state;
   digitalWrite(SSR_PIN, state);
-  server.sendHeader("Location","/");              
+  server.sendHeader("Location", baseURL + "/");              
   server.send(303);
   }
 
@@ -470,7 +476,7 @@ void read_sensor_DHT12() {
 
 void handleRoot(){
 	
-  String baseURL = "/" + String(FLOOR) + "/" + String(ROOM);
+  //String baseURL = "/" + String(FLOOR) + "/" + String(ROOM);
   String temp;
   String message = "<html><head>\n";              //content='55'
   //message.reserve(2600); 
@@ -492,6 +498,10 @@ void handleRoot(){
   
   message +=   "<h1>" + String(ESP8266_NAME) + "</h1>\n";
 
+// that would be the best, if here I could just present a list, 
+// loop through, and generate the necessary HTML markup
+// like each sensor / plugin / output could have its on HTML representation
+
 #ifdef UPTIME
   message +=   "<div class=\"w3-container\">";
   message +=   "<div class=\"title\">uptime:</div>";
@@ -503,56 +513,57 @@ void handleRoot(){
 #ifdef LIGHTS
   message +=   "<div class=\"title\">lights</div>";
   message +=   "<div class='btn-group'>";
-  message +=     "<a href='/light/on' class='w3-btn w3-white w3-border w3-border-blue w3-round'>light on</a>\n";
-  message +=     "<a href='/light/off' class='w3-btn w3-white w3-border w3-border-blue w3-round'>light off</a>\n";
-  message +=     "<a href='/light/state' class='w3-btn w3-white w3-border w3-border-blue w3-round'>light state</a>\n";
+  message +=     "<a href='"+baseURL+"/light/on' class='w3-btn w3-white w3-border w3-border-blue w3-round'>light on</a>\n";
+  message +=     "<a href='"+baseURL+"/light/off' class='w3-btn w3-white w3-border w3-border-blue w3-round'>light off</a>\n";
+  message +=     "<a href='"+baseURL+"/light/state' class='w3-btn w3-white w3-border w3-border-blue w3-round'>light state</a>\n";
+  message +=     "<a href='"+baseURL+"/light/toggle' class='w3-btn w3-white w3-border w3-border-blue w3-round'>light toggle</a>\n";
   message +=   "</div><br><br>";
 #endif
 
 #ifdef BUILTIN_LED
   message +=   "<div class=\"title\">built-in led</div>";
   message +=   "<div class='btn-group'>";
-  message +=     "<a href='/led/on' class='w3-btn w3-white w3-border w3-border-blue w3-round'>led on</a>\n";
-  message +=     "<a href='/led/off' class='w3-btn w3-white w3-border w3-border-blue w3-round'>led off</a>\n";
-  message +=     "<a href='/led/state' class='w3-btn w3-white w3-border w3-border-blue w3-round'>led state</a>\n";
-  message +=     "<a href='/led/toggle' class='w3-btn w3-white w3-border w3-border-blue w3-round'>led toggle</a>\n";
+  message +=     "<a href='"+baseURL+"/led/on' class='w3-btn w3-white w3-border w3-border-blue w3-round'>led on</a>\n";
+  message +=     "<a href='"+baseURL+"/led/off' class='w3-btn w3-white w3-border w3-border-blue w3-round'>led off</a>\n";
+  message +=     "<a href='"+baseURL+"/led/state' class='w3-btn w3-white w3-border w3-border-blue w3-round'>led state</a>\n";
+  message +=     "<a href='"+baseURL+"/led/toggle' class='w3-btn w3-white w3-border w3-border-blue w3-round'>led toggle</a>\n";
   message +=   "</div><br><br>";
 #endif
 
 #ifdef PIR_SENSOR
   message +=   "<div class=\"title\">pir - passive infrared sensor</div>";
   message +=   "<div class='btn-group'>";
-  message +=     "<a href='/pir/state' class='w3-btn w3-white w3-border w3-border-blue w3-round'>pir state</a>\n";
-  message +=     "<a href='/pir/delay' class='w3-btn w3-white w3-border w3-border-blue w3-round'>pir delay</a>\n";
+  message +=     "<a href='"+baseURL+"/pir/state' class='w3-btn w3-white w3-border w3-border-blue w3-round'>pir state</a>\n";
+  message +=     "<a href='"+baseURL+"/pir/delay' class='w3-btn w3-white w3-border w3-border-blue w3-round'>pir delay</a>\n";
   message +=   "</div><br><br>";
 #endif
 
 #ifdef DHT12_SENSOR
   message +=   "<div class=\"title\">temperature / humidity</div>";
   message +=   "<div class='btn-group'>";
-  message +=     "<a href='/temp/celsius' class='w3-btn w3-white w3-border w3-border-blue w3-round'>celsius</a>\n";
-  message +=     "<a href='/temp/fahrenheit' class='w3-btn w3-white w3-border w3-border-blue w3-round'>fahrenheit</a>\n";
-  message +=     "<a href='/humidity' class='w3-btn w3-white w3-border w3-border-blue w3-round'>humidity</a>\n";
+  message +=     "<a href='"+baseURL+"/temp/celsius' class='w3-btn w3-white w3-border w3-border-blue w3-round'>celsius</a>\n";
+  message +=     "<a href='"+baseURL+"/temp/fahrenheit' class='w3-btn w3-white w3-border w3-border-blue w3-round'>fahrenheit</a>\n";
+  message +=     "<a href='"+baseURL+"/humidity' class='w3-btn w3-white w3-border w3-border-blue w3-round'>humidity</a>\n";
   message +=   "</div><br><br>";
 #endif
 
 #ifdef RELAY
   message +=   "<div class=\"title\">relay</div>";
   message +=   "<div class='btn-group'>";
-  message +=     "<a href='/relay/on' class='w3-btn w3-white w3-border w3-border-blue w3-round'>relay on</a>\n";
-  message +=     "<a href='/relay/off' class='w3-btn w3-white w3-border w3-border-blue w3-round'>relay off</a>\n";
-  message +=     "<a href='/relay/toggle' class='w3-btn w3-white w3-border w3-border-blue w3-round'>relay toggle</a>\n";
-  message +=     "<a href='/relay/state' class='w3-btn w3-white w3-border w3-border-blue w3-round'>relay state</a>\n";
+  message +=     "<a href='"+baseURL+"/relay/on' class='w3-btn w3-white w3-border w3-border-blue w3-round'>relay on</a>\n";
+  message +=     "<a href='"+baseURL+"/relay/off' class='w3-btn w3-white w3-border w3-border-blue w3-round'>relay off</a>\n";
+  message +=     "<a href='"+baseURL+"/relay/toggle' class='w3-btn w3-white w3-border w3-border-blue w3-round'>relay toggle</a>\n";
+  message +=     "<a href='"+baseURL+"/relay/state' class='w3-btn w3-white w3-border w3-border-blue w3-round'>relay state</a>\n";
   message +=   "</div><br><br>";
 #endif
 
 #ifdef SS_RELAY
   message +=   "<div class=\"title\">ssr - solid state relay</div>";
   message +=   "<div class='btn-group'>";
-  message +=     "<a href='/ssrelay/on' class='w3-btn w3-white w3-border w3-border-blue w3-round'>ssrelay on</a>\n";
-  message +=     "<a href='/ssrelay/off' class='w3-btn w3-white w3-border w3-border-blue w3-round'>ssrelay off</a>\n";
-  message +=     "<a href='/ssrelay/toggle' class='w3-btn w3-white w3-border w3-border-blue w3-round'>ssrelay toggle</a>\n";
-  message +=     "<a href='/ssrelay/state' class='w3-btn w3-white w3-border w3-border-blue w3-round'>ssrelay state</a>\n";
+  message +=     "<a href='"+baseURL+"/ssrelay/on' class='w3-btn w3-white w3-border w3-border-blue w3-round'>ssrelay on</a>\n";
+  message +=     "<a href='"+baseURL+"/ssrelay/off' class='w3-btn w3-white w3-border w3-border-blue w3-round'>ssrelay off</a>\n";
+  message +=     "<a href='"+baseURL+"/ssrelay/toggle' class='w3-btn w3-white w3-border w3-border-blue w3-round'>ssrelay toggle</a>\n";
+  message +=     "<a href='"+baseURL+"/ssrelay/state' class='w3-btn w3-white w3-border w3-border-blue w3-round'>ssrelay state</a>\n";
   message +=   "</div><br><br>";
 #endif
 
