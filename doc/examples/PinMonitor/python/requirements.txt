@@ -8,6 +8,6 @@ pyasn1==0.1.9
 pycparser==2.14
 pyOpenSSL==0.15.1
 six==1.10.0
-wheel==0.26.0
+wheel==0.38.1
 
 pyserial
